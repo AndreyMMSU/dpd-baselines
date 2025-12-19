@@ -8,11 +8,11 @@ This project aims to provide:
 - reproducible baselines from classical and modern DPD literature.
 
 ## Repository structure
-src/dpd_baselines/ # core DPD library
-scripts/ # training and evaluation entrypoints
-papers/ # reproductions of published DPD models
-configs/ # experiment configurations
-tests/ # unit and smoke tests
+- src/dpd_baselines/ # core DPD library
+- scripts/ # training and evaluation entrypoints
+- papers/ # reproductions of published DPD models
+- configs/ # experiment configurations
+- tests/ # unit and smoke tests
 
 
 ## Core concepts
