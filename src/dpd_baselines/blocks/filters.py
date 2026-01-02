@@ -1,6 +1,8 @@
 import torch
 from torch import nn
 from typing import Optional, Literal
+import torch.nn.functional as F
+
 class ComplexFIR(nn.Module):
     def __init__(
         self,
@@ -49,7 +51,7 @@ class ComplexFIR(nn.Module):
         if not torch.is_complex(x):
             raise TypeError("x must be a complex tensor")
 
-        B, T = x.shape
+        _, T = x.shape
         h = self.h
         m = h.numel()
 
@@ -58,9 +60,7 @@ class ComplexFIR(nn.Module):
         if m == 1:
             return x * h[0]
         pad = m - 1
-        x_pad = torch.cat([x.new_zeros((B, pad)), x], dim=1) 
-        frames = x_pad.unfold(dimension=1, size=m, step=1)
-        h_rev = h.flip(0)  
-
-        y = (frames * h_rev).sum(dim=-1)  
+        x1 = x.unsqueeze(1)
+        x_pad = F.pad(x1, (pad, 0))
+        y = F.conv1d(x_pad, h.flip(0).view(1, 1, m), bias=None).squeeze(1)
         return y
