@@ -1,0 +1,152 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Optional, Tuple
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+def compute_psd_welch(
+    x: np.ndarray,
+    nfft: int = 4096,
+    hop: Optional[int] = None,
+    window: str = "hann",
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Welch PSD for complex baseband signal.
+
+    Args:
+      x: complex numpy array (N,)
+      nfft: FFT size
+      hop: hop size (default: nfft//2)
+      window: 'hann' only for now
+
+    Returns:
+      f: frequency bins in normalized units [-0.5, 0.5)
+      psd: linear PSD (not dB), shape (nfft,)
+    """
+    x = np.asarray(x)
+    if x.ndim != 1:
+        raise ValueError("x must be 1D")
+    if hop is None:
+        hop = nfft // 2
+
+    if window != "hann":
+        raise ValueError("only hann window supported for now")
+
+    win = np.hanning(nfft).astype(np.float64)
+    win_pow = np.sum(win * win) + 1e-30
+
+    psd_acc = np.zeros(nfft, dtype=np.float64)
+    cnt = 0
+
+    N = x.shape[0]
+    for s in range(0, N - nfft + 1, hop):
+        seg = x[s : s + nfft] * win
+        X = np.fft.fft(seg, n=nfft)
+        X = np.fft.fftshift(X)
+        P = (np.abs(X) ** 2) / win_pow
+        psd_acc += P
+        cnt += 1
+
+    psd = psd_acc / max(1, cnt)
+
+    # normalized frequency axis (Fs=1) => [-0.5, 0.5)
+    f = np.fft.fftshift(np.fft.fftfreq(nfft, d=1.0))
+    return f, psd
+
+
+def psd_to_db(psd: np.ndarray, eps: float = 1e-20) -> np.ndarray:
+    """Convert linear PSD to dB."""
+    psd = np.asarray(psd)
+    return 10.0 * np.log10(psd + eps)
+
+
+def normalize_psd_to_0db(psd_db: np.ndarray, ref_psd_db: np.ndarray) -> np.ndarray:
+    """
+    Shift psd_db so that the peak of ref_psd_db becomes 0 dB.
+    """
+    shift = float(np.max(ref_psd_db))
+    return psd_db - shift
+
+
+@dataclass
+class LiveMonitor:
+    """
+    Online plotter:
+      - top: PSD for x_ref, y_true, y_hat (all normalized so x_ref peak = 0 dB)
+      - bottom: train/val loss curve
+    """
+    nfft: int = 4096
+    hop: Optional[int] = None
+
+    def __post_init__(self):
+        plt.ion()
+        self.fig, (self.ax_psd, self.ax_loss) = plt.subplots(2, 1, figsize=(10, 7))
+        self.fig.tight_layout(pad=2.0)
+
+        # PSD lines
+        self.lx, = self.ax_psd.plot([], [], label="x_ref")
+        self.ly, = self.ax_psd.plot([], [], label="y_true")
+        self.lyh, = self.ax_psd.plot([], [], label="y_hat")
+        self.ax_psd.set_title("PSD (normalized: peak(x_ref)=0 dB)")
+        self.ax_psd.set_xlabel("Frequency (normalized)")
+        self.ax_psd.set_ylabel("PSD (dB)")
+        self.ax_psd.grid(True)
+        self.ax_psd.legend()
+
+        # Loss lines
+        self.train_hist = []
+        self.val_hist = []
+        self.lt, = self.ax_loss.plot([], [], label="train")
+        self.lv, = self.ax_loss.plot([], [], label="val")
+        self.ax_loss.set_title("Convergence")
+        self.ax_loss.set_xlabel("Epoch")
+        self.ax_loss.set_ylabel("Loss (dB or lin)")
+        self.ax_loss.grid(True)
+        self.ax_loss.legend()
+
+    def update(
+        self,
+        x_ref: np.ndarray,
+        y_true: np.ndarray,
+        y_hat: np.ndarray,
+        train_loss: float,
+        val_loss: float,
+        epoch: int,
+    ) -> None:
+        # PSD
+        f, psd_x = compute_psd_welch(x_ref, nfft=self.nfft, hop=self.hop)
+        _, psd_y = compute_psd_welch(y_true, nfft=self.nfft, hop=self.hop)
+        _, psd_yh = compute_psd_welch(y_hat, nfft=self.nfft, hop=self.hop)
+
+        psd_x_db = psd_to_db(psd_x)
+        psd_y_db = psd_to_db(psd_y)
+        psd_yh_db = psd_to_db(psd_yh)
+
+        # normalize all to x_ref peak = 0 dB
+        psd_x_db_n = normalize_psd_to_0db(psd_x_db, psd_x_db)
+        psd_y_db_n = normalize_psd_to_0db(psd_y_db, psd_x_db)
+        psd_yh_db_n = normalize_psd_to_0db(psd_yh_db, psd_x_db)
+
+        self.lx.set_data(f, psd_x_db_n)
+        self.ly.set_data(f, psd_y_db_n)
+        self.lyh.set_data(f, psd_yh_db_n)
+        self.ax_psd.relim()
+        self.ax_psd.autoscale_view()
+
+        # loss curves
+        self.train_hist.append(train_loss)
+        self.val_hist.append(val_loss)
+        xs = np.arange(1, len(self.train_hist) + 1)
+
+        self.lt.set_data(xs, self.train_hist)
+        self.lv.set_data(xs, self.val_hist)
+        self.ax_loss.relim()
+        self.ax_loss.autoscale_view()
+
+        self.fig.suptitle(f"Epoch {epoch}", fontsize=12)
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+        plt.pause(0.001)

@@ -26,8 +26,8 @@ class Hello_world_model(nn.Module):
         self.d0 = Delay(delay=0)
         self.d1 = Delay(delay=1)
         
-        self.poly0 = ChebPoly(order=poly_order0)
-        self.poly1 = ChebPoly(order=poly_order1)
+        self.poly0 = ChebPoly(order=poly_order0, coeff=torch.zeros(poly_order0, dtype=torch.complex64))
+        self.poly1 = ChebPoly(order=poly_order1, coeff=torch.zeros(poly_order0, dtype=torch.complex64))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if x.ndim != 2:

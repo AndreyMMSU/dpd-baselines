@@ -47,7 +47,6 @@ class ChebPoly(nn.Module):
             raise TypeError("x must be real for Chebyshev polynomial evaluation")
         if x.abs().max() > 1:
             x = x.clamp(-1.0, 1.0)
-            print("constrain")
         
         c = self.coeff
         K = self.order
