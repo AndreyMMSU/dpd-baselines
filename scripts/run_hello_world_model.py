@@ -3,15 +3,15 @@ import numpy as np
 import torch
 from scipy.io import loadmat
 from dpd_baselines.models.Hello_world import Hello_world_model
-from dpd_baselines.utils.live_monitor import live_monitor
+from dpd_baselines.utils.live_monitor import LiveMonitor
 
 
 def main():
     mat_path = "data/BlackBoxData_80.mat"
     seq_len = 2**10
     batch_size = 8
-    epochs = 100
-    lr = 1e-3
+    epochs = 500
+    lr = 1e-4
     device = "cuda" if torch.cuda.is_available() else "cpu"
     save_path = "checkpoints/first_run.pt"
 
@@ -34,12 +34,17 @@ def main():
     x_train, x_val = x_t[:n_train], x_t[n_train:]
     y_train, y_val = y_t[:n_train], y_t[n_train:]
 
-    model = Hello_world_model(filter_order=5, poly_order0=6, poly_order1=6).to(device)
+    monitor = LiveMonitor(nfft=512)
+    x_ref = x_val[:3].flatten().cpu()
+    y_ref = y_val[:3].flatten().cpu()
+
+
+    model = Hello_world_model(filter_order=10, poly_order0=5, poly_order1=5).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-    def nmse(y_hat, y_true, x_ref, eps=1e-12):
+    def nmse(y_hat, y_true, ref, eps=1e-12):
         err = (y_hat - y_true).abs().pow(2).mean()
-        ref = x_ref.abs().pow(2).mean()
+        ref = ref.abs().pow(2).mean()
         return 10*torch.log10(err / (ref + eps))
     
     model.train()
@@ -63,11 +68,33 @@ def main():
         train_loss = running / max(1, steps)
         model.eval()
         with torch.no_grad():
-            y_hat_val = model(x_val.to(device))
-            val_loss = float(nmse(y_hat_val, y_val.to(device), x_val).cpu())
+            xv = x_val.to(device)
+            yv = y_val.to(device)
+            y_hat_val = model(xv)
+            val_loss = float(nmse(y_hat_val, yv, ref=xv).cpu())
+
+            x_ref_t = x_val[:3].reshape(-1).to(device)   
+            y_ref_t = y_val[:3].reshape(-1).to(device)   
+
+            x_ref_bt = x_val[:3].to(device)              
+            y_hat_ref_bt = model(x_ref_bt)               
+
+            x_ref_np = x_ref_t.detach().cpu().numpy()
+            y_true_np = y_ref_t.detach().cpu().numpy()
+            y_hat_np = y_hat_ref_bt.reshape(-1).detach().cpu().numpy()
+
         model.train()
+        monitor.update(
+            x_ref=x_ref_np,
+            y_true=y_true_np,
+            y_hat=y_hat_np,
+            train_loss=float(loss),  
+            val_loss=float(val_loss),
+            epoch=epoch,
+        )
 
         print(f"epoch {epoch:02d} | train={train_loss:.3f} | val={val_loss:.3f}")
+        
 
     torch.save({"state_dict": model.state_dict()}, save_path)
     print(f"saved: {save_path}")

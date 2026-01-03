@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 
 import numpy as np
+import torch
 import matplotlib.pyplot as plt
 
 
@@ -26,6 +27,7 @@ def compute_psd_welch(
       f: frequency bins in normalized units [-0.5, 0.5)
       psd: linear PSD (not dB), shape (nfft,)
     """
+    x = _to_numpy(x)
     x = np.asarray(x)
     if x.ndim != 1:
         raise ValueError("x must be 1D")
@@ -70,6 +72,11 @@ def normalize_psd_to_0db(psd_db: np.ndarray, ref_psd_db: np.ndarray) -> np.ndarr
     shift = float(np.max(ref_psd_db))
     return psd_db - shift
 
+def _to_numpy(x):
+    if isinstance(x, torch.Tensor):
+        return x.detach().cpu().numpy()
+    return np.asarray(x)
+
 
 @dataclass
 class LiveMonitor:
@@ -90,8 +97,9 @@ class LiveMonitor:
         self.lx, = self.ax_psd.plot([], [], label="x_ref")
         self.ly, = self.ax_psd.plot([], [], label="y_true")
         self.lyh, = self.ax_psd.plot([], [], label="y_hat")
-        self.ax_psd.set_title("PSD (normalized: peak(x_ref)=0 dB)")
-        self.ax_psd.set_xlabel("Frequency (normalized)")
+        self.le, = self.ax_psd.plot([], [], label="err = y_hat - y_true")
+
+        self.ax_psd.set_xlabel("Frequency")
         self.ax_psd.set_ylabel("PSD (dB)")
         self.ax_psd.grid(True)
         self.ax_psd.legend()
@@ -103,7 +111,7 @@ class LiveMonitor:
         self.lv, = self.ax_loss.plot([], [], label="val")
         self.ax_loss.set_title("Convergence")
         self.ax_loss.set_xlabel("Epoch")
-        self.ax_loss.set_ylabel("Loss (dB or lin)")
+        self.ax_loss.set_ylabel("Loss")
         self.ax_loss.grid(True)
         self.ax_loss.legend()
 
@@ -125,7 +133,11 @@ class LiveMonitor:
         psd_y_db = psd_to_db(psd_y)
         psd_yh_db = psd_to_db(psd_yh)
 
-        # normalize all to x_ref peak = 0 dB
+        err = y_hat - y_true
+        _, psd_e = compute_psd_welch(err, nfft=self.nfft, hop=self.hop)
+        psd_e_db = psd_to_db(psd_e)
+        psd_e_db_n = normalize_psd_to_0db(psd_e_db, psd_x_db) 
+
         psd_x_db_n = normalize_psd_to_0db(psd_x_db, psd_x_db)
         psd_y_db_n = normalize_psd_to_0db(psd_y_db, psd_x_db)
         psd_yh_db_n = normalize_psd_to_0db(psd_yh_db, psd_x_db)
@@ -133,10 +145,10 @@ class LiveMonitor:
         self.lx.set_data(f, psd_x_db_n)
         self.ly.set_data(f, psd_y_db_n)
         self.lyh.set_data(f, psd_yh_db_n)
+        self.le.set_data(f, psd_e_db_n)
         self.ax_psd.relim()
         self.ax_psd.autoscale_view()
 
-        # loss curves
         self.train_hist.append(train_loss)
         self.val_hist.append(val_loss)
         xs = np.arange(1, len(self.train_hist) + 1)
@@ -145,8 +157,7 @@ class LiveMonitor:
         self.lv.set_data(xs, self.val_hist)
         self.ax_loss.relim()
         self.ax_loss.autoscale_view()
-
-        self.fig.suptitle(f"Epoch {epoch}", fontsize=12)
+        self.ax_psd.set_title(f"Epoch {epoch}")
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
         plt.pause(0.001)
