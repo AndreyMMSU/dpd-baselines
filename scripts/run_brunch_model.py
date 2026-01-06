@@ -17,13 +17,12 @@ def nmse_db(y_hat: torch.Tensor, y_true: torch.Tensor, ref: torch.Tensor, eps: f
 
 def main() -> None:
     mat_path = Path("data/BlackBoxData_200.mat")
-    seq_len = 2**10
-    batch_size = 8
-    epochs = 500
-    lr = 1e-2
+    seq_len = 2**9
+    batch_size = 4
+    epochs = 200
+    lr = 1e-1
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     ckpt_dir = Path("checkpoints")
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     save_path = ckpt_dir / "first_run_branch_model.pt"
@@ -60,8 +59,8 @@ def main() -> None:
         ],
         dtype=torch.int64,
     )
-    out_fir_orders = torch.full((3, 5), 3, dtype=torch.int64)
-    out_poly_orders = torch.full((3, 5), 3, dtype=torch.int64)
+    out_fir_orders = torch.full((3, 5), 5, dtype=torch.int64)
+    out_poly_orders = torch.full((3, 5), 5, dtype=torch.int64)
 
     model = BranchModel(
         in_delays=in_delays,
