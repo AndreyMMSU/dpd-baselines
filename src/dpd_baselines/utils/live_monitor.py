@@ -13,20 +13,8 @@ def compute_psd_welch(
     nfft: int = 4096,
     hop: Optional[int] = None,
     window: str = "hann",
+    fs: Optional[float] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Welch PSD for complex baseband signal.
-
-    Args:
-      x: complex numpy array (N,)
-      nfft: FFT size
-      hop: hop size (default: nfft//2)
-      window: 'hann' only for now
-
-    Returns:
-      f: frequency bins in normalized units [-0.5, 0.5)
-      psd: linear PSD (not dB), shape (nfft,)
-    """
     x = _to_numpy(x)
     x = np.asarray(x)
     if x.ndim != 1:
@@ -54,23 +42,20 @@ def compute_psd_welch(
 
     psd = psd_acc / max(1, cnt)
 
-    # normalized frequency axis (Fs=1) => [-0.5, 0.5)
-    f = np.fft.fftshift(np.fft.fftfreq(nfft, d=1.0))
+    d = 1.0 if fs is None else (1.0 / float(fs))
+    f = np.fft.fftshift(np.fft.fftfreq(nfft, d=d))
     return f, psd
 
 
 def psd_to_db(psd: np.ndarray, eps: float = 1e-20) -> np.ndarray:
-    """Convert linear PSD to dB."""
     psd = np.asarray(psd)
     return 10.0 * np.log10(psd + eps)
 
 
 def normalize_psd_to_0db(psd_db: np.ndarray, ref_psd_db: np.ndarray) -> np.ndarray:
-    """
-    Shift psd_db so that the peak of ref_psd_db becomes 0 dB.
-    """
     shift = float(np.max(ref_psd_db))
     return psd_db - shift
+
 
 def _to_numpy(x):
     if isinstance(x, torch.Tensor):
@@ -80,31 +65,25 @@ def _to_numpy(x):
 
 @dataclass
 class LiveMonitor:
-    """
-    Online plotter:
-      - top: PSD for x_ref, y_true, y_hat (all normalized so x_ref peak = 0 dB)
-      - bottom: train/val loss curve
-    """
     nfft: int = 4096
     hop: Optional[int] = None
+    fs: Optional[float] = None
 
     def __post_init__(self):
         plt.ion()
         self.fig, (self.ax_psd, self.ax_loss) = plt.subplots(2, 1, figsize=(10, 7))
         self.fig.tight_layout(pad=2.0)
 
-        # PSD lines
         self.lx, = self.ax_psd.plot([], [], label="x_ref")
         self.ly, = self.ax_psd.plot([], [], label="y_true")
         self.lyh, = self.ax_psd.plot([], [], label="y_hat")
         self.le, = self.ax_psd.plot([], [], label="err = y_hat - y_true")
 
-        self.ax_psd.set_xlabel("Frequency")
+        self.ax_psd.set_xlabel("Frequency (Hz)" if self.fs is not None else "Frequency (normalized)")
         self.ax_psd.set_ylabel("PSD (dB)")
         self.ax_psd.grid(True)
         self.ax_psd.legend()
 
-        # Loss lines
         self.train_hist = []
         self.val_hist = []
         self.lt, = self.ax_loss.plot([], [], label="train")
@@ -124,23 +103,22 @@ class LiveMonitor:
         val_loss: float,
         epoch: int,
     ) -> None:
-        # PSD
-        f, psd_x = compute_psd_welch(x_ref, nfft=self.nfft, hop=self.hop)
-        _, psd_y = compute_psd_welch(y_true, nfft=self.nfft, hop=self.hop)
-        _, psd_yh = compute_psd_welch(y_hat, nfft=self.nfft, hop=self.hop)
+        f, psd_x = compute_psd_welch(x_ref, nfft=self.nfft, hop=self.hop, fs=self.fs)
+        _, psd_y = compute_psd_welch(y_true, nfft=self.nfft, hop=self.hop, fs=self.fs)
+        _, psd_yh = compute_psd_welch(y_hat, nfft=self.nfft, hop=self.hop, fs=self.fs)
 
         psd_x_db = psd_to_db(psd_x)
         psd_y_db = psd_to_db(psd_y)
         psd_yh_db = psd_to_db(psd_yh)
 
         err = y_hat - y_true
-        _, psd_e = compute_psd_welch(err, nfft=self.nfft, hop=self.hop)
+        _, psd_e = compute_psd_welch(err, nfft=self.nfft, hop=self.hop, fs=self.fs)
         psd_e_db = psd_to_db(psd_e)
-        psd_e_db_n = normalize_psd_to_0db(psd_e_db, psd_x_db) 
 
         psd_x_db_n = normalize_psd_to_0db(psd_x_db, psd_x_db)
         psd_y_db_n = normalize_psd_to_0db(psd_y_db, psd_x_db)
         psd_yh_db_n = normalize_psd_to_0db(psd_yh_db, psd_x_db)
+        psd_e_db_n = normalize_psd_to_0db(psd_e_db, psd_x_db)
 
         self.lx.set_data(f, psd_x_db_n)
         self.ly.set_data(f, psd_y_db_n)
@@ -149,14 +127,15 @@ class LiveMonitor:
         self.ax_psd.relim()
         self.ax_psd.autoscale_view()
 
-        self.train_hist.append(train_loss)
-        self.val_hist.append(val_loss)
+        self.train_hist.append(float(train_loss))
+        self.val_hist.append(float(val_loss))
         xs = np.arange(1, len(self.train_hist) + 1)
 
         self.lt.set_data(xs, self.train_hist)
         self.lv.set_data(xs, self.val_hist)
         self.ax_loss.relim()
         self.ax_loss.autoscale_view()
+
         self.ax_psd.set_title(f"Epoch {epoch}")
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()

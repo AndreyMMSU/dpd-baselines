@@ -4,6 +4,8 @@ from pathlib import Path
 import numpy as np
 import torch
 from scipy.io import loadmat
+from scipy import signal
+
 
 from dpd_baselines.models.branch_model import BranchModel
 from dpd_baselines.utils.live_monitor import LiveMonitor
@@ -17,10 +19,10 @@ def nmse_db(y_hat: torch.Tensor, y_true: torch.Tensor, ref: torch.Tensor, eps: f
 
 def main() -> None:
     mat_path = Path("data/BlackBoxData_200.mat")
-    seq_len = 2**9
-    batch_size = 4
+    seq_len = 2**12
+    batch_size = 8
     epochs = 200
-    lr = 1e-1
+    lr = 1e-2
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ckpt_dir = Path("checkpoints")
@@ -30,6 +32,15 @@ def main() -> None:
     m = loadmat(str(mat_path))
     x = np.asarray(m["x"]).squeeze()
     y = np.asarray(m["y"]).squeeze()
+
+    fc = 0.3e6          
+    fs = 1.2288e6                       
+    tw = 0.1e6         
+    numtaps = int(np.ceil(4*fs/tw))  
+    numtaps |= 1        
+    b = signal.firwin(numtaps, cutoff=fc, fs=fs, window="hann", pass_zero="lowpass")
+    y = signal.filtfilt(b, [1.0], y)
+    x = signal.filtfilt(b, [1.0], x)
 
     x_t = torch.as_tensor(x.astype(np.complex64))
     y_t = torch.as_tensor(y.astype(np.complex64))
@@ -75,7 +86,7 @@ def main() -> None:
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-    monitor = LiveMonitor(nfft=512)
+    monitor = LiveMonitor(nfft=512, fs=fs)
 
     model.train()
     for epoch in range(1, epochs + 1):
