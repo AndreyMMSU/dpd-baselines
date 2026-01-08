@@ -19,9 +19,9 @@ def nmse_db(y_hat: torch.Tensor, y_true: torch.Tensor, ref: torch.Tensor, eps: f
 
 def main() -> None:
     mat_path = Path("data/BlackBoxData_200.mat")
-    seq_len = 2**12
+    seq_len = 2**10
     batch_size = 8
-    epochs = 200
+    epochs = 2000
     lr = 1e-2
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -70,7 +70,7 @@ def main() -> None:
         ],
         dtype=torch.int64,
     )
-    out_fir_orders = torch.full((3, 5), 5, dtype=torch.int64)
+    out_fir_orders = torch.full((3, 5), 1, dtype=torch.int64)
     out_poly_orders = torch.full((3, 5), 5, dtype=torch.int64)
 
     model = BranchModel(
@@ -116,8 +116,8 @@ def main() -> None:
             y_hat_val = model(xv)
             val_loss = float(nmse_db(y_hat_val, yv, ref=xv).detach().cpu())
 
-            x_ref_bt = x_val[:3].to(device)
-            y_true_bt = y_val[:3].to(device)
+            x_ref_bt = x_val[:5].to(device)
+            y_true_bt = y_val[:5].to(device)
             y_hat_ref_bt = model(x_ref_bt)
 
             x_ref_np = x_ref_bt.reshape(-1).detach().cpu().numpy()
