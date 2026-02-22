@@ -30,7 +30,7 @@ def main():
     x_t = x_t[: Nw * seq_len].view(Nw, seq_len)
     y_t = y_t[: Nw * seq_len].view(Nw, seq_len)
 
-    fc = 0.3e6          
+    fc = 0.2e6          
     fs = 1.2288e6                       
     numtaps = 50
     y_t, BL_coeff = make_BL(y_t, fs, fc, numtaps = numtaps)
@@ -47,7 +47,7 @@ def main():
     y_ref = y_val[:3].flatten().cpu()
 
 
-    model = Hello_world_model(filter_order_in=10, filter_order_out=10, poly_order0=5, poly_order1=5, BL_coeff=BL_coeff).to(device)
+    model = Hello_world_model(filter_order_in=10, filter_order_out=10, poly_order0=10, poly_order1=10, BL_coeff=BL_coeff).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     def nmse(y_hat, y_true, ref, eps=1e-12):

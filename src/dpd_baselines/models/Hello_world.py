@@ -27,9 +27,14 @@ class Hello_world_model(nn.Module):
         self.input_layer = ComplexFIR(m=filter_order_in, init='delta')
         self.d0 = Delay(delay=0)
         self.d1 = Delay(delay=1)
-        
-        self.poly0 = ChebPoly(order=poly_order0, coeff=torch.zeros(poly_order0, dtype=torch.complex64))
-        self.poly1 = ChebPoly(order=poly_order1, coeff=torch.zeros(poly_order0, dtype=torch.complex64))
+
+        coeff_init_poly0 = torch.zeros(poly_order0, dtype=torch.complex64)
+        coeff_init_poly0[1] = 1+0j
+        coeff_init_poly1 = torch.zeros(poly_order1, dtype=torch.complex64)
+        coeff_init_poly1[1] = 1+0j
+
+        self.poly0 = ChebPoly(order=poly_order0, coeff=coeff_init_poly0)
+        self.poly1 = ChebPoly(order=poly_order1, coeff=coeff_init_poly1)
 
         self.output_fir = ComplexFIR(m=filter_order_out, init='delta')
         self.BL = ComplexFIR(m=BL_coeff.shape[0], coeff=BL_coeff, trainable=False)
