@@ -74,9 +74,14 @@ class BranchModel(nn.Module):
         out_poly_orders: torch.Tensor,  # (3,5)
         poly_init: str = "identity",
         out_fir_order: Optional[int] = None,
+        out_BL_coeff: torch.Tensor = torch.tensor([1+0j])
     ):
+        
         super().__init__()
-
+        if out_BL_coeff.ndim != 1:
+            raise ValueError("out_BL must be 1D tensor")
+        if not isinstance(out_BL_coeff, torch.Tensor):
+            raise TypeError("out_BL must be a torch.Tensor")
         n_in = 3
         n_leaf = 5
 
@@ -110,6 +115,7 @@ class BranchModel(nn.Module):
         ])
 
         self.out_fir = ComplexFIR(m=out_fir_order, init="delta", trainable=True) if out_fir_order else None
+        self.out_BL = ComplexFIR(m = out_BL_coeff.shape[0], coeff= out_BL_coeff, trainable=False)  
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if not isinstance(x, torch.Tensor):
@@ -129,4 +135,6 @@ class BranchModel(nn.Module):
         if self.out_fir is not None:
             y = self.out_fir(y)
 
+        y = self.out_BL(y)
+        
         return y

@@ -11,23 +11,29 @@ class Hello_world_model(nn.Module):
     Pipeline: 
     
                |--delay--poly|
-    x -> fir --|             + --> y
+    x -> fir --|             + --> fir --> BL --> y
                |--delay--poly|
 
 
     """         
 
     def __init__(self, 
-                 filter_order: int = 5,
+                 filter_order_in: int = 5,
+                 filter_order_out: int = 5,
                  poly_order0: int = 3, 
-                 poly_order1: int = 3):
+                 poly_order1: int = 3,
+                 BL_coeff: torch.Tensor = torch.tensor([1 + 0j])):
         super().__init__()
-        self.input_layer = ComplexFIR(m=filter_order, init='delta')
+        self.input_layer = ComplexFIR(m=filter_order_in, init='delta')
         self.d0 = Delay(delay=0)
         self.d1 = Delay(delay=1)
         
         self.poly0 = ChebPoly(order=poly_order0, coeff=torch.zeros(poly_order0, dtype=torch.complex64))
         self.poly1 = ChebPoly(order=poly_order1, coeff=torch.zeros(poly_order0, dtype=torch.complex64))
+
+        self.output_fir = ComplexFIR(m=filter_order_out, init='delta')
+        self.BL = ComplexFIR(m=BL_coeff.shape[0], coeff=BL_coeff, trainable=False)
+
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if x.ndim != 2:
@@ -43,7 +49,8 @@ class Hello_world_model(nn.Module):
         poly0 = self.poly0(d0.abs())
         poly1 = self.poly1(d1.abs())
 
-        y = (poly1*d1 + poly0*d0)
+        y = self.BL(self.output_fir((poly1*d1 + poly0*d0)))
+
 
         return y
 

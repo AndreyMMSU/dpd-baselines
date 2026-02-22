@@ -6,9 +6,10 @@ import torch
 from scipy.io import loadmat
 from scipy import signal
 
-
+from dpd_baselines.signals.filter_design import make_BL
 from dpd_baselines.models.branch_model import BranchModel
 from dpd_baselines.utils.live_monitor import LiveMonitor
+
 
 
 def nmse_db(y_hat: torch.Tensor, y_true: torch.Tensor, ref: torch.Tensor, eps: float = 1e-20) -> torch.Tensor:
@@ -32,19 +33,12 @@ def main() -> None:
     m = loadmat(str(mat_path))
     x = np.asarray(m["x"]).squeeze()
     y = np.asarray(m["y"]).squeeze()
-
-    fc = 0.3e6          
-    fs = 1.2288e6                       
-    tw = 0.1e6         
-    numtaps = int(np.ceil(4*fs/tw))  
-    numtaps |= 1        
-    b = signal.firwin(numtaps, cutoff=fc, fs=fs, window="hann", pass_zero="lowpass")
-    y = signal.filtfilt(b, [1.0], y)
-    x = signal.filtfilt(b, [1.0], x)
-
     x_t = torch.as_tensor(x.astype(np.complex64))
     y_t = torch.as_tensor(y.astype(np.complex64))
 
+    fc = 0.3e6          
+    fs = 1.2288e6                       
+    numtaps = 50
     scale = x_t.abs().max().clamp_min(1e-12)
     x_t = x_t / scale
     y_t = y_t / scale
@@ -53,6 +47,8 @@ def main() -> None:
     Nw = (N // seq_len)
     x_t = x_t[: Nw * seq_len].view(Nw, seq_len)
     y_t = y_t[: Nw * seq_len].view(Nw, seq_len)
+
+    y_t, b = make_BL(y_t, fs, fc, numtaps)
 
     n_train = int(0.9 * Nw)
     x_train, x_val = x_t[:n_train], x_t[n_train:]
@@ -70,8 +66,8 @@ def main() -> None:
         ],
         dtype=torch.int64,
     )
-    out_fir_orders = torch.full((3, 5), 1, dtype=torch.int64)
-    out_poly_orders = torch.full((3, 5), 5, dtype=torch.int64)
+    out_fir_orders = torch.full((3, 5), 5, dtype=torch.int64)
+    out_poly_orders = torch.full((3, 5), 2, dtype=torch.int64)
 
     model = BranchModel(
         in_delays=in_delays,
@@ -82,6 +78,7 @@ def main() -> None:
         out_poly_orders=out_poly_orders,
         poly_init="identity",
         out_fir_order=5,
+        out_BL_coeff=torch.tensor(b, dtype=torch.complex128)
     ).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
