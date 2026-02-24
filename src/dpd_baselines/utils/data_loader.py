@@ -51,7 +51,7 @@ class BlackBoxData80Loader:
     def get_signals(self):
         return self.x, self.y, self.eRef
 
-    def apply_bl(self, fc, numtaps=64):
+    def apply_bl(self, fc = 0.2e6, numtaps=64):
         if self.bl_coeff is not None:
             old_fc, old_nt = self._bl_params or (None, None)
             raise RuntimeError(f"BL already applied (prev fc={old_fc}, numtaps={old_nt}).")

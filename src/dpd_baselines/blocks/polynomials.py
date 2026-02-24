@@ -49,6 +49,37 @@ class ChebPoly(nn.Module):
         else:
             self.register_buffer("coeff", c)
 
+    def feature(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Возвращает массив признаков Чебышева:
+        shape = (B, T, order), где feature[..., k] = T_k(x)
+        """
+        if x is None:
+            raise TypeError("x must be a torch.Tensor, got None")
+        if not isinstance(x, torch.Tensor):
+            raise TypeError("x must be a torch.Tensor")
+        if x.ndim != 2:
+            raise ValueError("x must have shape (B, T)")
+        if x.is_complex():
+            raise TypeError("x must be real for Chebyshev polynomial evaluation")
+
+        x = x.clamp(-1.0, 1.0)
+        K = self.order
+
+        T_prev = torch.ones_like(x)   # T0
+        if K == 1:
+            return T_prev.unsqueeze(-1)
+
+        T_curr = x                    # T1
+        feats = [T_prev, T_curr]
+
+        for k in range(2, K):
+            T_next = (2.0 * x) * T_curr - T_prev
+            feats.append(T_next)
+            T_prev, T_curr = T_curr, T_next
+
+        return torch.stack(feats, dim=-1)  # (B, T, K)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if x is None:
             raise TypeError("x must be a torch.Tensor, got None")

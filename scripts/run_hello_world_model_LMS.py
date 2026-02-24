@@ -8,8 +8,8 @@ from dpd_baselines.utils.live_monitor import LiveMonitor
 
 def main():
     mat_path = "data/BlackBoxData_80.mat"
-    seq_len = 2**9
-    lr = 3
+    seq_len = 2**8
+    lr = 2**-6
     fs = 1.2288e6
     fc = 0.2e6                              
     numtaps = 50
@@ -31,7 +31,8 @@ def main():
     model = Hello_world_model(filter_order_in=3, filter_order_out=3, poly_order0=5, poly_order1=5, BL_coeff=BL_coeff).to(device)
     # model = Hello_world_model(filter_order_in=3, filter_order_out=3, poly_order0=5, poly_order1=5).to(device)
 
-    optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.0, weight_decay=0.0)
+    # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.0, weight_decay=0.0)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     def nmse(y_hat, y_true, ref, eps=1e-12):
         err = (y_hat - y_true).abs().pow(2).mean()
