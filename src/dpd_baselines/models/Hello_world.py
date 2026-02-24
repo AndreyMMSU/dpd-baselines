@@ -28,9 +28,9 @@ class Hello_world_model(nn.Module):
         self.d0 = Delay(delay=0)
         self.d1 = Delay(delay=1)
 
-        coeff_init_poly0 = torch.zeros(poly_order0, dtype=torch.complex64)
+        coeff_init_poly0 = torch.zeros(poly_order0, dtype=torch.float32)
         coeff_init_poly0[1] = 0+0j
-        coeff_init_poly1 = torch.zeros(poly_order1, dtype=torch.complex64)
+        coeff_init_poly1 = torch.zeros(poly_order1, dtype=torch.float32)
         coeff_init_poly1[1] = 0+0j
 
         self.poly0 = ChebPoly(order=poly_order0, coeff=coeff_init_poly0)
