@@ -85,9 +85,9 @@ class LiveMonitor:
         self.ax_psd.legend()
 
         self.train_hist = []
-        self.val_hist = []
+        # self.val_hist = []
         self.lt, = self.ax_loss.plot([], [], label="train")
-        self.lv, = self.ax_loss.plot([], [], label="val")
+        # self.lv, = self.ax_loss.plot([], [], label="val")
         self.ax_loss.set_title("Convergence")
         self.ax_loss.set_xlabel("Epoch")
         self.ax_loss.set_ylabel("Loss")
@@ -100,7 +100,7 @@ class LiveMonitor:
         y_true: np.ndarray,
         y_hat: np.ndarray,
         train_loss: float,
-        val_loss: float,
+        # val_loss: float,
         epoch: int,
     ) -> None:
         f, psd_x = compute_psd_welch(x_ref, nfft=self.nfft, hop=self.hop, fs=self.fs)
@@ -128,11 +128,11 @@ class LiveMonitor:
         self.ax_psd.autoscale_view()
 
         self.train_hist.append(float(train_loss))
-        self.val_hist.append(float(val_loss))
+        # self.val_hist.append(float(val_loss))
         xs = np.arange(1, len(self.train_hist) + 1)
 
         self.lt.set_data(xs, self.train_hist)
-        self.lv.set_data(xs, self.val_hist)
+        # self.lv.set_data(xs, self.val_hist)
         self.ax_loss.relim()
         self.ax_loss.autoscale_view()
 
