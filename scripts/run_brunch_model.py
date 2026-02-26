@@ -9,7 +9,7 @@ from scipy import signal
 from dpd_baselines.signals.filter_design import make_BL
 from dpd_baselines.models.branch_model import BranchModel
 from dpd_baselines.utils.live_monitor import LiveMonitor
-
+from dpd_baselines.utils.data_loader import BlackBoxData80Loader
 
 
 def nmse_db(y_hat: torch.Tensor, y_true: torch.Tensor, ref: torch.Tensor, eps: float = 1e-20) -> torch.Tensor:
@@ -30,33 +30,21 @@ def main() -> None:
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     save_path = ckpt_dir / "first_run_branch_model.pt"
 
-    m = loadmat(str(mat_path))
-    x = np.asarray(m["x"]).squeeze()
-    y = np.asarray(m["y"]).squeeze()
-    x_t = torch.as_tensor(x.astype(np.complex64))
-    y_t = torch.as_tensor(y.astype(np.complex64))
-
     fc = 0.3e6          
     fs = 1.2288e6                       
     numtaps = 50
-    scale = x_t.abs().max().clamp_min(1e-12)
-    x_t = x_t / scale
-    y_t = y_t / scale
 
-    N = x_t.numel()
-    Nw = (N // seq_len)
-    x_t = x_t[: Nw * seq_len].view(Nw, seq_len)
-    y_t = y_t[: Nw * seq_len].view(Nw, seq_len)
+    data = BlackBoxData80Loader(mat_path, seq_len=seq_len)
+    data.normalize()
+    BL_coeff = data.apply_bl(fc=fc, numtaps=numtaps)
+    x_t, y_t, _ = data.get_signals()
+    
+    x_train = x_t[:]
+    y_train = y_t[:]
 
-    y_t, b = make_BL(y_t, fs, fc, numtaps)
-
-    n_train = int(0.9 * Nw)
-    x_train, x_val = x_t[:n_train], x_t[n_train:]
-    y_train, y_val = y_t[:n_train], y_t[n_train:]
-
-    in_delays = torch.tensor([0, 1, 2], dtype=torch.int64)
+    in_delays = torch.tensor([-1, 1, 1], dtype=torch.int64)
     in_fir_orders = torch.tensor([3, 3, 3], dtype=torch.int64)
-    in_poly_orders = torch.tensor([2, 2, 2], dtype=torch.int64)
+    in_poly_orders = torch.tensor([3, 3, 3], dtype=torch.int64)
 
     out_delays = torch.tensor(
         [
@@ -66,6 +54,8 @@ def main() -> None:
         ],
         dtype=torch.int64,
     )
+
+    
     out_fir_orders = torch.full((3, 5), 5, dtype=torch.int64)
     out_poly_orders = torch.full((3, 5), 2, dtype=torch.int64)
 
@@ -128,7 +118,7 @@ def main() -> None:
             y_true=y_true_np,
             y_hat=y_hat_np,
             train_loss=float(train_loss),
-            val_loss=float(val_loss),
+            # val_loss=float(val_loss),
             epoch=epoch,
         )
 

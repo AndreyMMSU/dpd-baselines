@@ -19,8 +19,8 @@ def main():
     numtaps = 128
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    
     save_path = "checkpoints/first_run.pt"
-
     os.makedirs("checkpoints", exist_ok=True)
 
     data = BlackBoxData80Loader(mat_path, seq_len=seq_len)
