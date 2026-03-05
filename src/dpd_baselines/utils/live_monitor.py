@@ -1,4 +1,4 @@
-from __future__ import annotations
+# from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Optional, Tuple
@@ -140,3 +140,86 @@ class LiveMonitor:
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
         plt.pause(0.001)
+
+
+
+@dataclass
+class LiveMonitorTrainTest:
+    nfft: int = 4096
+    hop: Optional[int] = None
+    fs: Optional[float] = None
+
+    def __post_init__(self):
+        plt.ion()
+        self.fig, (self.ax_psd, self.ax_loss) = plt.subplots(2, 1, figsize=(10, 7))
+        self.fig.tight_layout(pad=2.0)
+
+        self.lx, = self.ax_psd.plot([], [], label="x_ref")
+        self.ly, = self.ax_psd.plot([], [], label="y_true")
+        self.lyh, = self.ax_psd.plot([], [], label="y_hat")
+        self.le, = self.ax_psd.plot([], [], label="err = y_hat - y_true")
+
+        self.ax_psd.set_xlabel("Frequency (Hz)" if self.fs is not None else "Frequency (normalized)")
+        self.ax_psd.set_ylabel("PSD (dB)")
+        self.ax_psd.grid(True)
+        self.ax_psd.legend()
+
+        self.train_hist = []
+        self.val_hist = []
+        self.lt, = self.ax_loss.plot([], [], label="train")
+        self.lv, = self.ax_loss.plot([], [], label="val")
+        self.ax_loss.set_title("Convergence")
+        self.ax_loss.set_xlabel("Epoch")
+        self.ax_loss.set_ylabel("Loss")
+        self.ax_loss.grid(True)
+        self.ax_loss.legend()
+
+    def update(
+        self,
+        x_ref: np.ndarray,
+        y_true: np.ndarray,
+        y_hat: np.ndarray,
+        train_loss: float,
+        val_loss: float,
+        epoch: int,
+    ) -> None:
+        f, psd_x = compute_psd_welch(x_ref, nfft=self.nfft, hop=self.hop, fs=self.fs)
+        _, psd_y = compute_psd_welch(y_true, nfft=self.nfft, hop=self.hop, fs=self.fs)
+        _, psd_yh = compute_psd_welch(y_hat, nfft=self.nfft, hop=self.hop, fs=self.fs)
+
+        psd_x_db = psd_to_db(psd_x)
+        psd_y_db = psd_to_db(psd_y)
+        psd_yh_db = psd_to_db(psd_yh)
+
+        err = y_hat - y_true
+        _, psd_e = compute_psd_welch(err, nfft=self.nfft, hop=self.hop, fs=self.fs)
+        psd_e_db = psd_to_db(psd_e)
+
+        psd_x_db_n = normalize_psd_to_0db(psd_x_db, psd_x_db)
+        psd_y_db_n = normalize_psd_to_0db(psd_y_db, psd_x_db)
+        psd_yh_db_n = normalize_psd_to_0db(psd_yh_db, psd_x_db)
+        psd_e_db_n = normalize_psd_to_0db(psd_e_db, psd_x_db)
+
+        self.lx.set_data(f, psd_x_db_n)
+        self.ly.set_data(f, psd_y_db_n)
+        self.lyh.set_data(f, psd_yh_db_n)
+        self.le.set_data(f, psd_e_db_n)
+        self.ax_psd.relim()
+        self.ax_psd.autoscale_view()
+
+        self.train_hist.append(float(train_loss))
+        self.val_hist.append(float(val_loss))
+        xs = np.arange(1, len(self.train_hist) + 1)
+
+        self.lt.set_data(xs, self.train_hist)
+        self.lv.set_data(xs, self.val_hist)
+        self.ax_loss.relim()
+        self.ax_loss.autoscale_view()
+
+        self.ax_psd.set_title(f"Epoch {epoch}")
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+        plt.pause(0.001)
+
+
+

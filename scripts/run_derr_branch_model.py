@@ -7,7 +7,7 @@ from scipy.io import loadmat
 from scipy import signal
 
 from dpd_baselines.models.derr_branch_model import FilteredGMP_DN
-from dpd_baselines.utils.live_monitor import LiveMonitor
+from dpd_baselines.utils.live_monitor import LiveMonitorTrainTest
 
 
 def nmse_db(y_hat: torch.Tensor, y_true: torch.Tensor, ref: torch.Tensor, eps: float = 1e-20) -> torch.Tensor:
@@ -73,12 +73,10 @@ def main() -> None:
     x_t = torch.as_tensor(x.astype(np.complex64))
     y_t = torch.as_tensor(y.astype(np.complex64))
 
-    # normalize by peak (as in your launcher)
     scale = x_t.abs().max().clamp_min(1e-12)
     x_t = x_t / scale
     y_t = y_t / scale
 
-    # reshape into (B, T)
     N = x_t.numel()
     Nw = (N // seq_len)
     x_t = x_t[: Nw * seq_len].view(Nw, seq_len)
@@ -88,10 +86,6 @@ def main() -> None:
     x_train, x_val = x_t[:n_train], x_t[n_train:]
     y_train, y_val = y_t[:n_train], y_t[n_train:]
 
-    # -------------------------
-    # model config
-    # -------------------------
-    # few nonlinear branches (minimal GMP) + per-branch FIR + per-branch complex gain
     orders = [1, 3, 5]
     delays = [0, 1, 2]               # try [0,0,0] if you want no explicit delays
     fir_orders = [7, 7, 7]           # <=0 -> None
@@ -106,7 +100,7 @@ def main() -> None:
     warmup = model.warmup()
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-    monitor = LiveMonitor(nfft=512, fs=fs)
+    monitor = LiveMonitorTrainTest(nfft=512, fs=fs)
 
     # -------------------------
     # train
@@ -179,8 +173,8 @@ def main() -> None:
             x_ref=x_ref_np,
             y_true=y_true_np,
             y_hat=y_hat_np,
-            train_loss=float(train_full),  # training metric for FULL model
-            val_loss=float(val_full),      # validation metric for FULL model
+            train_loss=float(train_full),  
+            val_loss=float(val_full),      
             epoch=epoch,
         )
 
@@ -192,9 +186,6 @@ def main() -> None:
             f"g1={g1.real:+.3e}{g1.imag:+.3e}j"
         )
 
-    # -------------------------
-    # save
-    # -------------------------
     torch.save(
         {
             "state_dict": model.state_dict(),

@@ -73,7 +73,7 @@ def main() -> None:
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-    monitor = LiveMonitor(nfft=512, fs=fs)
+    monitor = LiveMonitorTrainTest(nfft=512, fs=fs)
 
     model.train()
     for epoch in range(1, epochs + 1):
@@ -97,28 +97,24 @@ def main() -> None:
 
         model.eval()
         with torch.no_grad():
-            xv = x_val.to(device)
-            yv = y_val.to(device)
+            cut = 20
+            y_hat_val = model(x_t)  
+            nmse_db_step = float(nmse(y_hat_val[:, cut:], y_t[:, cut:], ref=x_t[:, cut:]).detach().cpu())
 
-            y_hat_val = model(xv)
-            val_loss = float(nmse_db(y_hat_val, yv, ref=xv).detach().cpu())
+            x_ref_r = x_t.reshape(-1).to(device)   
+            y_ref_r = y_t.reshape(-1).to(device)   
+            y_hat_r = y_hat_val.reshape(-1).to(device)   
 
-            x_ref_bt = x_val[:5].to(device)
-            y_true_bt = y_val[:5].to(device)
-            y_hat_ref_bt = model(x_ref_bt)
-
-            x_ref_np = x_ref_bt.reshape(-1).detach().cpu().numpy()
-            y_true_np = y_true_bt.reshape(-1).detach().cpu().numpy()
-            y_hat_np = y_hat_ref_bt.reshape(-1).detach().cpu().numpy()
+            x_ref_np = x_ref_r.detach().cpu().numpy()
+            y_true_np = y_ref_r.detach().cpu().numpy()
+            y_hat_np = y_hat_r.detach().cpu().numpy()
 
         model.train()
-
         monitor.update(
             x_ref=x_ref_np,
             y_true=y_true_np,
             y_hat=y_hat_np,
-            train_loss=float(train_loss),
-            # val_loss=float(val_loss),
+            train_loss=float(nmse_db_step),  
             epoch=epoch,
         )
 
