@@ -17,6 +17,15 @@ def nmse_db(y_hat: torch.Tensor, y_true: torch.Tensor, ref: torch.Tensor, eps: f
     p_ref = ref.abs().pow(2).mean()
     return 10.0 * torch.log10(err / (p_ref + eps))
 
+def nmse(y_hat, y_true, ref, eps=1e-12):
+    err = (y_hat - y_true).abs().pow(2).mean()
+    ref = ref.abs().pow(2).mean()
+    return 10*torch.log10(err / (ref + eps))
+
+def mse(y_hat, y_true):
+    err = (y_hat - y_true).abs().pow(2).mean()
+    return err 
+    
 
 def main() -> None:
     mat_path = Path("data/BlackBoxData_200.mat")
@@ -68,13 +77,13 @@ def main() -> None:
         out_poly_orders=out_poly_orders,
         poly_init="identity",
         out_fir_order=5,
-        out_BL_coeff=torch.tensor(b, dtype=torch.complex128)
+        out_BL_coeff=torch.tensor(BL_coeff, dtype=torch.complex128)
     ).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    monitor = LiveMonitor(nfft=512, fs=fs)
 
-    monitor = LiveMonitorTrainTest(nfft=512, fs=fs)
-
+    n_train = x_train.shape[0]
     model.train()
     for epoch in range(1, epochs + 1):
         running = 0.0
@@ -86,7 +95,7 @@ def main() -> None:
 
             optimizer.zero_grad(set_to_none=True)
             y_hat = model(xb)
-            loss = nmse_db(y_hat, yb, ref=xb)
+            loss = mse(y_hat, yb)
             loss.backward()
             optimizer.step()
 
@@ -118,7 +127,7 @@ def main() -> None:
             epoch=epoch,
         )
 
-        print(f"epoch {epoch:03d} | train={train_loss:.3f} | val={val_loss:.3f}")
+        print(f"epoch {epoch:03d} | train={train_loss:.3f} | val={nmse_db_step:.3f}")
 
     torch.save(
         {

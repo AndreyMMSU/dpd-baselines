@@ -82,6 +82,7 @@ class BranchModel(nn.Module):
             raise ValueError("out_BL must be 1D tensor")
         if not isinstance(out_BL_coeff, torch.Tensor):
             raise TypeError("out_BL must be a torch.Tensor")
+        
         n_in = 3
         n_leaf = 5
 
