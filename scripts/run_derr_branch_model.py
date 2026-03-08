@@ -28,9 +28,7 @@ def _lowpass_filtfilt(z: np.ndarray, fc: float, fs: float, tw: float) -> np.ndar
 
 
 def main() -> None:
-    # -------------------------
-    # config
-    # -------------------------
+
     mat_path = Path("data/BlackBoxData_80.mat")
     x_key = "x"
     y_key = "eRef"  # <-- твоя постановка: desired error = PA_out - X
@@ -117,7 +115,6 @@ def main() -> None:
 
             optimizer.zero_grad(set_to_none=True)
 
-            # full output + debug
             y_hat_full, dbg = model.forward_with_debug(xb)
             z1 = dbg["z1"]
 
